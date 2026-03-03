@@ -1,0 +1,121 @@
+---
+title: "pr_housing_vacancy"
+author: "Jorge R. Soldevila Irizarry"
+date: "2026-03-03"
+output: github_document
+---
+
+---
+title: "Puerto Rico Housing Vacancy Analysis (2024)"
+author: "Jorge R. Soldevila Irizarry"
+date: "2026-03-03"
+output: github_document
+---
+
+# Overview
+This script retrieves housing vacancy data for Puerto Rico from the US Census Bureau (ACS 5-Year Estimates, 2024). It pulls data at two geographic levels:
+1. **Municipio (County)**
+2. **Census Tract**
+
+## Setup and Libraries
+
+```{r Call library packages, warning=FALSE, message=FALSE}
+# Install pacman if not already installed
+if (!require("pacman")) install.packages("pacman")
+
+# Load libraries
+pacman::p_load(
+  tidyverse,       # Data manipulation (dplyr, readr, etc.)
+  tidycensus,      # Interface with US Census API
+  sf               # Handling geospatial data (geometry = TRUE)
+)
+
+# Note: Ensure your Census API key is installed.
+# If not, run: census_api_key("YOUR_KEY_HERE", install = TRUE)
+```
+
+##Variable set up
+
+```{r Variable Dictionary, warning=FALSE, message=FALSE}
+
+# Variable dictionary
+housing_vars <- c(
+  total_pop       = "B01003_001E",
+  # Vacancy Status Breakdown (B25004)
+  total_vac_det   = "B25004_001E",
+  vac_rent        = "B25004_002E",
+  vac_rent_no_occ = "B25004_003E",
+  vac_sale        = "B25004_004E",
+  vac_sold        = "B25004_005E",
+  vac_recr        = "B25004_006E", # For seasonal/recreational use
+  vac_migr        = "B25004_007E", # For migrant workers
+  vac_oth         = "B25004_008E",
+  # Tenure (B25003)
+  total_occ_ten   = "B25003_001E",
+  occ_own         = "B25003_002E",
+  occ_rent        = "B25003_003E",
+  # General Occupancy (B25002)
+  tot_hous        = "B25002_001E",
+  tot_occ         = "B25002_002E",
+  tot_vac         = "B25002_003E"
+)
+
+```
+
+##County level data
+
+```{r Housing by county, message=FALSE, warning=FALSE}
+
+pr_cnty_df <- get_acs(
+  geography = "county",
+  variables = housing_vars,
+  state = "PR",
+  year = 2024,
+  survey = "acs5",
+  output = "wide",
+  geometry = TRUE,
+  keep_geo_vars = TRUE,
+  progress_bar = FALSE) %>%
+  select(-ends_with("M")) %>% # Removing Margin of Error (MOE) columns for cleaner view
+  mutate(
+    land_area_sqmi = ALAND / 2589988.10,
+    pop_density = total_pop / land_area_sqmi,
+    pct_occ = tot_occ / tot_hous * 100,
+    pct_vac = tot_vac / tot_hous * 100,
+    pct_rent_occ = occ_rent / total_occ_ten * 100,
+    pct_seasonal = vac_recr / total_vac_det * 100,
+    pct_oth_vac = vac_oth / total_vac_det * 100
+  )
+
+st_write(pr_cnty_df, "pr_county_housing.shp", delete_dsn = TRUE)
+```
+
+##Tract level data
+
+```{r Housing by tract, message=FALSE, warning=FALSE}
+
+pr_tract_df <- get_acs(
+  geography = "tract",
+  variables = housing_vars,
+  state = "PR",
+  year = 2024,
+  survey = "acs5",
+  output = "wide",
+  geometry = TRUE,
+  keep_geo_vars = TRUE,
+  progress_bar = FALSE) %>%
+  select(-ends_with("M")) %>% # Removing Margin of Error (MOE) columns for cleaner view
+   mutate(
+    land_area_sqmi = ALAND / 2589988.10,
+    pop_density = total_pop / land_area_sqmi,
+    pct_occ = tot_occ / tot_hous * 100,
+    pct_vac = tot_vac / tot_hous * 100,
+    pct_rent_occ = occ_rent / total_occ_ten * 100,
+    pct_seasonal = vac_recr / total_vac_det * 100,
+    pct_oth_vac = vac_oth / total_vac_det * 100
+  )
+
+st_write(pr_tract_df, "pr_tract_housing.shp", delete_dsn = TRUE)
+```
+
+
